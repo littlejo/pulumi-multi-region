@@ -81,7 +81,7 @@ class VPC:
        return self.vpc.id
 
    def get_subnet_ids(self):
-       return [self.subnets["subnet-private-0"].id, self.subnets["subnet-private-1"].id]
+       return [self.subnets["subnet-public-0"].id, self.subnets["subnet-public-1"].id]
 
    def create_subnets(self):
        subnets_map = {
@@ -105,6 +105,18 @@ class VPC:
        self.igw = aws.ec2.InternetGateway(f"vpc-igw-{self.name}",
                                                 vpc_id=self.vpc.id,
                                                 opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider))
+   def create_ec2(self, profile, sg_id, ami_id, key_name):
+       user_data = get_userdata("")
+       self.ec2 = aws.ec2.Instance(f"ec2-{region}",
+                                     instance_type="t3.medium",
+                                     subnet_id=self.get_subnet_ids()[0],
+                                     key_name=key_name,
+                                     ami=ami_id,
+                                     iam_instance_profile=profile,
+                                     vpc_security_group_ids=[sg_id],
+                                     user_data=user_data,
+                                     opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider),
+                                    )
 
 def get_ami_id(aws_provider):
     ami = aws.ec2.get_ami(
@@ -141,7 +153,7 @@ def create_iam_role():
     }],
     )
     role = aws.iam.Role(f"instance",
-        name="admin-role",
+        name="admin-role-multiaccount",
         assume_role_policy=instance_assume_role_policy.json,
         )
 
@@ -154,20 +166,82 @@ def create_iam_role():
         name="test_profile",
         role=role.name)
 
-def create_key_pair():
-    deployer = aws.ec2.KeyPair("deployer",
-        key_name="deployer-key",
-        public_key="aaaa",
+    return "test_profile"
+
+def create_key_pair(parent, region, aws_provider):
+    deployer = aws.ec2.KeyPair(f"deployer-multiaccount-{region}",
+        key_name="deployer-multiaccount",
+        public_key="AAA",
+        opts=pulumi.ResourceOptions(parent=parent, provider=aws_provider),
         )
+    return "deployer-multiaccount"
 
 def create_s3_bucket(region):
     aws_provider = aws.Provider(f"aws-s3-{region}", region=region)
     example = aws.s3.BucketV2("s3-bucket-pulumi-state",
-        bucket="littlejo-cmesh",
+        bucket_prefix="littlejo-cmesh",
         tags={
             "Name": "My bucket",
             "Environment": "Dev",
         })
+
+def get_userdata(s3_bucket):
+    combined = pulumi.Output.all(s3_bucket)
+    return combined.apply(lambda vars: f"""#!/bin/bash
+yum install docker yum-utils shadow-utils make git -y
+#systemctl start docker
+
+git clone https://github.com/littlejo/pulumi-cilium-python-examples /root/pulumi-cilium-python-examples
+
+curl -fsSL https://get.pulumi.com | sh
+echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
+echo 'export BUCKET_S3=s3://{vars[0]}?region=us-west-2' >> /root/.bashrc
+echo 'export AWS_DEFAULT_REGION=us-east-1' >> /root/.bashrc
+echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+
+CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+CLI_ARCH=amd64
+sha256sum --check cilium-linux-$CLI_ARCH.tar.gz.sha256sum
+tar xzvfC cilium-linux-$CLI_ARCH.tar.gz /usr/local/bin
+
+TERRATEST_VERSION=0.0.7
+wget https://github.com/littlejo/check-cilium-clustermesh/releases/download/v$TERRATEST_VERSION/cilium-clustermesh-terratest-$TERRATEST_VERSION-linux-amd64.tar.gz
+tar xzvfC cilium-clustermesh-terratest-$TERRATEST_VERSION-linux-amd64.tar.gz /usr/local/bin
+
+yum-config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+yum install gh -y
+
+git clone https://github.com/littlejo/results-cilium-clustermesh /root/results-cilium-clustermesh
+
+git clone https://github.com/littlejo/check-cilium-clustermesh
+cp check-cilium-clustermesh/scripts/*.py /usr/local/bin
+cp check-cilium-clustermesh/scripts/*.sh /usr/local/bin
+chmod 755 /usr/local/bin/cilium-status.py /usr/local/bin/cilium-clustermesh-status.py /usr/local/bin/check-cilium.sh
+
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+
+mkdir -p ~/.terraform.d/plugins/terraform.local/local/cilium/0.0.1/linux_amd64
+
+# Download the installer script:
+curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+# Alternatively: wget --secure-protocol=TLSv1_2 --https-only https://get.opentofu.org/install-opentofu.sh -O install-opentofu.sh
+
+# Give it execution permissions:
+chmod +x install-opentofu.sh
+
+# Please inspect the downloaded script
+
+# Run the installer:
+./install-opentofu.sh --install-method rpm
+
+# Remove the installer:
+rm install-opentofu.sh
+""")
 
 regions = [
            "us-east-1",
@@ -182,22 +256,20 @@ regions = [
            #"af-south-1",
            #"me-south-1",
           ]
-#regions = ["us-east-1", "us-west-2"]
-regions = ["us-east-1"]
+profile = create_iam_role()
+create_s3_bucket(regions[0])
 
 for region in regions:
     null = local.Command(f"{region}-vpc")
     aws_provider = aws.Provider(f"aws-{region}", region=region, opts=pulumi.ResourceOptions(parent=null))
+    key_pair = create_key_pair(null, region, aws_provider)
     azs_info = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=aws_provider, parent=null))
     azs = azs_info.names[:2]
     vpc = VPC(f"public-{region}", azs=azs, aws_provider=aws_provider, parent=null)
     vpc.create_subnets()
     vpc.create_internet_gateway()
-    SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
+    sg = SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
+    vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair)
     #pulumi.export(f"ami_id_{region}", get_ami_id(aws_provider))
     #pulumi.export(f"vpc_id_{region}", get_vpc_id(aws_provider))
 
-
-create_iam_role()
-create_key_pair()
-#create_s3_bucket(regions[0])
