@@ -134,8 +134,7 @@ class VPC:
        self.igw = aws.ec2.InternetGateway(f"vpc-igw-{self.name}",
                                                 vpc_id=self.vpc.id,
                                                 opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider))
-   def create_ec2(self, profile, sg_id, ami_id, key_name):
-       user_data = get_userdata("")
+   def create_ec2(self, profile, sg_id, ami_id, key_name, user_data):
        self.ec2 = aws.ec2.Instance(f"ec2-{region}",
                                      instance_type="t3.medium",
                                      subnet_id=self.get_subnet_ids()[0],
@@ -207,15 +206,15 @@ def create_key_pair(parent, region, aws_provider):
 
 def create_s3_bucket(region):
     aws_provider = aws.Provider(f"aws-s3-{region}", region=region)
-    example = aws.s3.BucketV2("s3-bucket-pulumi-state",
+    return aws.s3.BucketV2("s3-bucket-pulumi-state",
         bucket_prefix="littlejo-cmesh",
         tags={
             "Name": "My bucket",
             "Environment": "Dev",
         })
 
-def get_userdata(s3_bucket):
-    combined = pulumi.Output.all(s3_bucket)
+def get_userdata(s3_bucket, region):
+    combined = pulumi.Output.all(s3_bucket, region)
     return combined.apply(lambda vars: f"""#!/bin/bash
 yum install docker yum-utils shadow-utils make git -y
 #systemctl start docker
@@ -224,13 +223,13 @@ git clone https://github.com/littlejo/pulumi-cilium-python-examples /root/pulumi
 
 curl -fsSL https://get.pulumi.com | sh
 echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
-echo 'export BUCKET_S3=s3://{vars[0]}?region=us-west-2' >> /root/.bashrc
+echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
 echo 'export AWS_DEFAULT_REGION=us-east-1' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
 
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
 CLI_ARCH=amd64
-sha256sum --check cilium-linux-$CLI_ARCH.tar.gz.sha256sum
+curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/$CILIUM_CLI_VERSION/cilium-linux-$CLI_ARCH.tar.gz
 tar xzvfC cilium-linux-$CLI_ARCH.tar.gz /usr/local/bin
 
 TERRATEST_VERSION=0.0.7
@@ -285,8 +284,11 @@ regions = [
            #"af-south-1",
            #"me-south-1",
           ]
+
+bucket_region = regions[0]
+
 profile = create_iam_role()
-create_s3_bucket(regions[0])
+bucket = create_s3_bucket(bucket_region)
 
 for region in regions:
     null = local.Command(f"{region}-vpc")
@@ -299,7 +301,10 @@ for region in regions:
     vpc.create_internet_gateway()
     vpc.create_route_table("public")
     sg = SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
-    vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair)
+    user_data = get_userdata(bucket.id, bucket_region)
+    vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair, user_data)
     pulumi.export(f"ip_{region}", vpc.ec2.public_ip)
+    pulumi.export(f"bucket_id_{region}", bucket.id)
+    #pulumi.export(f"user_data_{region}", user_data)
     #pulumi.export(f"vpc_id_{region}", get_vpc_id(aws_provider))
 
