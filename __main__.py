@@ -138,6 +138,7 @@ class VPC:
        self.ec2 = aws.ec2.Instance(f"ec2-{region}",
                                      instance_type="t3.medium",
                                      subnet_id=self.get_subnet_ids()[0],
+                                     root_block_device={"volume_size": 50},
                                      key_name=key_name,
                                      ami=ami_id,
                                      iam_instance_profile=profile,
