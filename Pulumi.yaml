@@ -1,0 +1,6 @@
+name: deployment-511
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Create ec2s to deploy 511 clusters
