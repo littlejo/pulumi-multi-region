@@ -100,6 +100,35 @@ class VPC:
                map_public_ip_on_launch=(name.startswith("subnet-public-")),
                tags={"Name": name + f"-{self.name}"},
            )
+   def create_route_table(self, table_type):
+       tags = {
+         "Name": f"vpc-rt-{table_type}-{self.name}",
+       }
+
+       rt = aws.ec2.RouteTable(f"vpc-rt-{table_type}-{self.name}",
+                                        vpc_id=self.vpc.id,
+                                        opts=pulumi.ResourceOptions(parent=self.vpc, provider=self.aws_provider),
+                                        tags=tags,
+                )
+
+       aws.ec2.Route(f"vpc-rt-r-{table_type}-{self.name}",
+                                 route_table_id=rt.id,
+                                 destination_cidr_block="0.0.0.0/0",
+                                 gateway_id=self.igw.id,
+                                 opts=pulumi.ResourceOptions(parent=rt, provider=self.aws_provider)
+       )
+
+       aws.ec2.RouteTableAssociation(f"vpc-rt-assoc-{table_type}-{self.name}-1",
+                                        subnet_id=self.subnets[f"subnet-{table_type}-0"],
+                                        route_table_id=rt.id,
+                                        opts=pulumi.ResourceOptions(parent=rt, provider=self.aws_provider)
+       )
+
+       aws.ec2.RouteTableAssociation(f"vpc-rt-assoc-{table_type}-{self.name}-2",
+                                        subnet_id=self.subnets[f"subnet-{table_type}-1"],
+                                        route_table_id=rt.id,
+                                        opts=pulumi.ResourceOptions(parent=rt, provider=self.aws_provider)
+       )
 
    def create_internet_gateway(self):
        self.igw = aws.ec2.InternetGateway(f"vpc-igw-{self.name}",
@@ -268,8 +297,9 @@ for region in regions:
     vpc = VPC(f"public-{region}", azs=azs, aws_provider=aws_provider, parent=null)
     vpc.create_subnets()
     vpc.create_internet_gateway()
+    vpc.create_route_table("public")
     sg = SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
     vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair)
-    #pulumi.export(f"ami_id_{region}", get_ami_id(aws_provider))
+    pulumi.export(f"ip_{region}", vpc.ec2.public_ip)
     #pulumi.export(f"vpc_id_{region}", get_vpc_id(aws_provider))
 
