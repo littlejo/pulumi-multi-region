@@ -214,26 +214,28 @@ def create_s3_bucket(region):
             "Environment": "Dev",
         })
 
-def get_userdata(s3_bucket, region):
-    combined = pulumi.Output.all(s3_bucket, region)
+def get_userdata(s3_bucket, s3_region, ec2_region):
+    combined = pulumi.Output.all(s3_bucket, s3_region, ec2_region)
     return combined.apply(lambda vars: f"""#!/bin/bash
-yum install docker yum-utils shadow-utils make git -y
-#systemctl start docker
+yum install yum-utils shadow-utils make git -y
 
 git clone https://github.com/littlejo/pulumi-cilium-python-examples /root/pulumi-cilium-python-examples
 
 curl -fsSL https://get.pulumi.com | sh
 echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
 echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
-echo 'export AWS_DEFAULT_REGION=us-east-1' >> /root/.bashrc
+echo 'export AWS_DEFAULT_REGION={vars[2]}' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
 CLI_ARCH=amd64
 curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/$CILIUM_CLI_VERSION/cilium-linux-$CLI_ARCH.tar.gz
 tar xzvfC cilium-linux-$CLI_ARCH.tar.gz /usr/local/bin
 
-TERRATEST_VERSION=0.0.7
+TERRATEST_VERSION=0.0.8
 wget https://github.com/littlejo/check-cilium-clustermesh/releases/download/v$TERRATEST_VERSION/cilium-clustermesh-terratest-$TERRATEST_VERSION-linux-amd64.tar.gz
 tar xzvfC cilium-clustermesh-terratest-$TERRATEST_VERSION-linux-amd64.tar.gz /usr/local/bin
 
@@ -247,29 +249,9 @@ cp check-cilium-clustermesh/scripts/*.py /usr/local/bin
 cp check-cilium-clustermesh/scripts/*.sh /usr/local/bin
 chmod 755 /usr/local/bin/cilium-status.py /usr/local/bin/cilium-clustermesh-status.py /usr/local/bin/check-cilium.sh
 
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod 700 get_helm.sh
 ./get_helm.sh
-
-mkdir -p ~/.terraform.d/plugins/terraform.local/local/cilium/0.0.1/linux_amd64
-
-# Download the installer script:
-curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
-# Alternatively: wget --secure-protocol=TLSv1_2 --https-only https://get.opentofu.org/install-opentofu.sh -O install-opentofu.sh
-
-# Give it execution permissions:
-chmod +x install-opentofu.sh
-
-# Please inspect the downloaded script
-
-# Run the installer:
-./install-opentofu.sh --install-method rpm
-
-# Remove the installer:
-rm install-opentofu.sh
 """)
 
 regions = [
