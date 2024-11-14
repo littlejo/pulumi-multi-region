@@ -268,6 +268,7 @@ config = pulumi.Config()
 
 regions = get_config_value("awsRegions", "us-east-1,us-east-1").split(",")
 bucket_region = get_config_value("s3Region", "us-east-1")
+public_key = get_config_value("publicKey", "TODO")
 
 profile = create_iam_role()
 bucket = create_s3_bucket(bucket_region)
