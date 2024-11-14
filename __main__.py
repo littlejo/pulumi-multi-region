@@ -148,7 +148,7 @@ class VPC:
                                     )
    def create_key_pair(self):
         deployer = aws.ec2.KeyPair(f"deployer-multiaccount-{self.name}",
-            key_name="deployer-multiaccount",
+            key_name=f"deployer-multiaccount-{self.name}",
             public_key=public_key,
             opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider),
             )
