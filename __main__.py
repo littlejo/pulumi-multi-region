@@ -134,18 +134,25 @@ class VPC:
        self.igw = aws.ec2.InternetGateway(f"vpc-igw-{self.name}",
                                                 vpc_id=self.vpc.id,
                                                 opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider))
-   def create_ec2(self, profile, sg_id, ami_id, key_name, user_data):
-       self.ec2 = aws.ec2.Instance(f"ec2-{region}",
+   def create_ec2(self, profile, sg_id, ami_id, user_data):
+       self.ec2 = aws.ec2.Instance(f"ec2-{self.name}",
                                      instance_type="t3.medium",
                                      subnet_id=self.get_subnet_ids()[0],
                                      root_block_device={"volume_size": 50},
-                                     key_name=key_name,
+                                     key_name=self.key_name,
                                      ami=ami_id,
                                      iam_instance_profile=profile,
                                      vpc_security_group_ids=[sg_id],
                                      user_data=user_data,
                                      opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider),
                                     )
+   def create_key_pair(self):
+        deployer = aws.ec2.KeyPair(f"deployer-multiaccount-{self.name}",
+            key_name="deployer-multiaccount",
+            public_key=public_key,
+            opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider),
+            )
+        self.key_name = deployer.key_name
 
 def get_ami_id(aws_provider):
     ami = aws.ec2.get_ami(
@@ -197,13 +204,6 @@ def create_iam_role():
 
     return "test_profile"
 
-def create_key_pair(parent, region, aws_provider):
-    deployer = aws.ec2.KeyPair(f"deployer-multiaccount-{region}",
-        key_name="deployer-multiaccount",
-        public_key=public_key,
-        opts=pulumi.ResourceOptions(parent=parent, provider=aws_provider),
-        )
-    return "deployer-multiaccount"
 
 def create_s3_bucket(region):
     aws_provider = aws.Provider(f"aws-s3-{region}", region=region)
@@ -275,21 +275,22 @@ public_key = get_config_value("publicKey", "TODO")
 profile = create_iam_role()
 bucket = create_s3_bucket(bucket_region)
 
-for region in regions:
-    null = local.Command(f"{region}-vpc")
-    aws_provider = aws.Provider(f"aws-{region}", region=region, opts=pulumi.ResourceOptions(parent=null))
-    key_pair = create_key_pair(null, region, aws_provider)
+for i, region in enumerate(regions):
+    pulumi_region = f"{region}-{i}"
+    null = local.Command(f"{pulumi_region}-vpc")
+    aws_provider = aws.Provider(f"aws-{pulumi_region}", region=region, opts=pulumi.ResourceOptions(parent=null))
     azs_info = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=aws_provider, parent=null))
     azs = azs_info.names[:2]
-    vpc = VPC(f"public-{region}", azs=azs, aws_provider=aws_provider, parent=null)
+    vpc = VPC(f"public-{pulumi_region}", azs=azs, aws_provider=aws_provider, parent=null)
     vpc.create_subnets()
     vpc.create_internet_gateway()
     vpc.create_route_table("public")
-    sg = SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
+    sg = SecurityGroup(f"ec2-{pulumi_region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
     user_data = get_userdata(bucket.id, bucket_region, region)
-    vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair, user_data)
-    pulumi.export(f"ip_{region}", vpc.ec2.public_ip)
-    pulumi.export(f"bucket_id_{region}", bucket.id)
+    vpc.create_key_pair()
+    vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), user_data)
+    pulumi.export(f"ip_{pulumi_region}", vpc.ec2.public_ip)
+    pulumi.export(f"bucket_id_{pulumi_region}", bucket.id)
     #pulumi.export(f"user_data_{region}", user_data)
     #pulumi.export(f"vpc_id_{region}", get_vpc_id(aws_provider))
 
