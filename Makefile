@@ -11,3 +11,5 @@ deploy:
 	pulumi config set --stack $(STACK) publicKey "$(PUBLIC_KEY)"
 	pulumi up --stack $(STACK)
 
+destroy:
+	pulumi down
