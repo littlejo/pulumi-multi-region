@@ -254,21 +254,18 @@ chmod 700 get_helm.sh
 ./get_helm.sh
 """)
 
-regions = [
-           "us-east-1",
-           "us-west-2",
-           #"ca-central-1",
-           #"sa-east-1",
-           #"eu-west-3",
-           #"eu-west-1",
-           #"eu-north-1",
-           #"ap-northeast-1",
-           #"ap-southeast-2",
-           #"af-south-1",
-           #"me-south-1",
-          ]
+def get_config_value(key, default=None, value_type=str):
+    try:
+        value = config.require(key)
+        return value_type(value)
+    except pulumi.ConfigMissingError:
+        return default
+    except ValueError:
+        print(f"Warning: Could not convert config '{key}' to {value_type.__name__}, using default.")
+        return default
 
-bucket_region = regions[0]
+regions = get_config_value("awsRegions", "us-east-1,us-east-1").split(",")
+bucket_region = get_config_value("s3Region", "us-east-1")
 
 profile = create_iam_role()
 bucket = create_s3_bucket(bucket_region)
