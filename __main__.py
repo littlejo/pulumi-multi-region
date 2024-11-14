@@ -283,7 +283,7 @@ for region in regions:
     vpc.create_internet_gateway()
     vpc.create_route_table("public")
     sg = SecurityGroup(f"ec2-{region}", vpc_id=vpc.get_vpc_id(), description="Allow ssh inbound traffic", ingresses=[{"ip_protocol": "tcp", "cidr_ip": "0.0.0.0/0", "from_port": 22, "to_port": 22}], parent=null, aws_provider=aws_provider)
-    user_data = get_userdata(bucket.id, bucket_region)
+    user_data = get_userdata(bucket.id, bucket_region, region)
     vpc.create_ec2(profile, sg.sg, get_ami_id(aws_provider), key_pair, user_data)
     pulumi.export(f"ip_{region}", vpc.ec2.public_ip)
     pulumi.export(f"bucket_id_{region}", bucket.id)
