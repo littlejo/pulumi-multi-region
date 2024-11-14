@@ -8,6 +8,6 @@ deploy:
 	pulumi stack init $(STACK) || true
 	pulumi config set --stack $(STACK) awsRegions $(AWS_REGIONS)
 	pulumi config set --stack $(STACK) s3Region $(S3_REGION)
-	pulumi config set --stack $(STACK) publicKey $(PUBLIC_KEY)
+	pulumi config set --stack $(STACK) publicKey "$(PUBLIC_KEY)"
 	pulumi up --stack $(STACK)
 

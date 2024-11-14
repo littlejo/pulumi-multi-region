@@ -200,7 +200,7 @@ def create_iam_role():
 def create_key_pair(parent, region, aws_provider):
     deployer = aws.ec2.KeyPair(f"deployer-multiaccount-{region}",
         key_name="deployer-multiaccount",
-        public_key="AAA",
+        public_key=public_key,
         opts=pulumi.ResourceOptions(parent=parent, provider=aws_provider),
         )
     return "deployer-multiaccount"
