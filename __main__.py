@@ -212,7 +212,9 @@ def create_s3_bucket(region):
         tags={
             "Name": "My bucket",
             "Environment": "Dev",
-        })
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider),
+        )
 
 def get_userdata(s3_bucket, s3_region, ec2_region):
     combined = pulumi.Output.all(s3_bucket, s3_region, ec2_region)
