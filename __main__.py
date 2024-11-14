@@ -136,7 +136,7 @@ class VPC:
                                                 opts=pulumi.ResourceOptions(parent=self.parent, provider=self.aws_provider))
    def create_ec2(self, profile, sg_id, ami_id, user_data):
        self.ec2 = aws.ec2.Instance(f"ec2-{self.name}",
-                                     instance_type="t3.medium",
+                                     instance_type=instance_type,
                                      subnet_id=self.get_subnet_ids()[0],
                                      root_block_device={"volume_size": 50},
                                      key_name=self.key_name,
@@ -270,6 +270,7 @@ config = pulumi.Config()
 
 regions = get_config_value("awsRegions", "us-east-1,us-east-1").split(",")
 bucket_region = get_config_value("s3Region", "us-east-1")
+instance_type = get_config_value("instanceType", "t3.medium")
 public_key = get_config_value("publicKey", "TODO")
 
 profile = create_iam_role()
