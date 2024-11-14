@@ -264,6 +264,8 @@ def get_config_value(key, default=None, value_type=str):
         print(f"Warning: Could not convert config '{key}' to {value_type.__name__}, using default.")
         return default
 
+config = pulumi.Config()
+
 regions = get_config_value("awsRegions", "us-east-1,us-east-1").split(",")
 bucket_region = get_config_value("s3Region", "us-east-1")
 
