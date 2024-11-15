@@ -1,9 +1,9 @@
 STACK=deploy-ec2
-AWS_REGIONS=us-east-1,us-west-2
-S3_REGION=us-west-2
+AWS_REGIONS=eu-west-3,sa-east-1
+S3_REGION=eu-west-3
 INSTANCE_TYPE=t3.medium
 FINAL_INSTANCE_TYPE=t3.medium
-FINAL_REGION=us-east-1
+FINAL_REGION=eu-west-3
 #AWS_REGIONS=us-east-1,us-west-2,ca-central-1,sa-east-1,eu-west-3,eu-west-1,eu-north-1,ap-northeast-1,ap-southeast-2,af-south-1,me-south-1
 
 deploy:
