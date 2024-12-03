@@ -308,7 +308,8 @@ for i, region in enumerate(regions):
     pulumi_region = f"{region}-{i}"
     null = local.Command(f"{pulumi_region}-vpc")
     aws_provider = aws.Provider(f"aws-{pulumi_region}", region=region, opts=pulumi.ResourceOptions(parent=null))
-    azs_info = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=aws_provider, parent=null))
+    azs_info = aws.get_availability_zones(state="available", filters=[{"name": "opt-in-status", "values": ["opt-in-not-required"]}],
+                                          opts=pulumi.InvokeOptions(provider=aws_provider, parent=null))
     azs = azs_info.names[:2]
     vpc = VPC(f"public-{pulumi_region}", azs=azs, aws_provider=aws_provider, parent=null)
     vpc.create_subnets()
