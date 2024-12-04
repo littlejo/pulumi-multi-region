@@ -219,7 +219,7 @@ def create_s3_bucket(region):
 def get_userdata(s3_bucket, s3_region, ec2_region):
     combined = pulumi.Output.all(s3_bucket, s3_region, ec2_region)
     return combined.apply(lambda vars: f"""#!/bin/bash
-yum install yum-utils shadow-utils make git -y
+yum install yum-utils shadow-utils make git python3-pip -y
 
 git clone https://github.com/littlejo/pulumi-cilium-python-examples /root/pulumi-cilium-python-examples
 
@@ -228,6 +228,8 @@ echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
 echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
 echo 'export AWS_DEFAULT_REGION={vars[2]}' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+
+python3 -m pip install asciinema
 
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
@@ -245,7 +247,7 @@ chmod 700 get_helm.sh
 def get_userdata_final(s3_bucket, s3_region, ec2_region):
     combined = pulumi.Output.all(s3_bucket, s3_region, ec2_region)
     return combined.apply(lambda vars: f"""#!/bin/bash
-yum install yum-utils shadow-utils make git -y
+yum install yum-utils shadow-utils make git python3-pip -y
 
 git clone https://github.com/littlejo/pulumi-cilium-python-examples /root/pulumi-cilium-python-examples
 
@@ -254,6 +256,8 @@ echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
 echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
 echo 'export AWS_DEFAULT_REGION={vars[2]}' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+
+python3 -m pip install asciinema
 
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
