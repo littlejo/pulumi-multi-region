@@ -228,6 +228,7 @@ echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
 echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
 echo 'export AWS_DEFAULT_REGION={vars[2]}' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+echo 'alias cdp="cd /root/pulumi-cilium-python-examples/eks-clustermesh-multi"' >> /root/.bashrc
 
 python3 -m pip install asciinema
 
@@ -256,6 +257,7 @@ echo 'export PATH=$PATH:/.pulumi/bin' >> /root/.bashrc
 echo 'export BUCKET_S3=s3://{vars[0]}?region={vars[1]}' >> /root/.bashrc
 echo 'export AWS_DEFAULT_REGION={vars[2]}' >> /root/.bashrc
 echo 'export PULUMI_CONFIG_PASSPHRASE=""' >> /root/.bashrc
+echo 'alias cdp="cd /root/pulumi-cilium-python-examples/eks-clustermesh-multi"' >> /root/.bashrc
 
 python3 -m pip install asciinema
 
